@@ -233,6 +233,9 @@ if errorlevel 1 (
 ) else (
     echo.
     echo [成功] 推送完成
+    REM 安全：清空 remote URL 里的 Token（明文出现在 URL 很危险）
+    git remote set-url origin "https://github.com/WWH3602/second-brain.git"
+    echo [安全] remote URL 已清空 Token
 )
 
 REM 清空环境变量
