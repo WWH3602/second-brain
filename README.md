@@ -1,148 +1,125 @@
 # 第二大脑（Second Brain）
 
-> 版本: v1.1 | 2026-06-17 创建
-> 类别: 01_PC数码（生活辅助类）
-> 状态: 进行中
+> 版本: v2.0 | 2026-06-17 初版 / 2026-06-22 重构目录
 
 打通 **手机(iOS QQ) ↔ 虚拟机 OpenClaw(耗子助手) ↔ 自己的电脑** 三端，
 让 AI 替我**记录灵感、收集工具/网站/美食/名言**，新电脑一句"给我装机清单"就恢复。
 
 ---
 
-## 1. 仓库信息（重要，AI 必须记住）
+## 仓库信息
 
 | 项 | 值 |
 | --- | --- |
 | **GitHub 用户名** | `WWH3602` |
 | **仓库名** | `second-brain` |
-| **仓库 URL（读）** | `https://github.com/WWH3602/second-brain.git` |
-| **仓库 URL（写，需 Token）** | `https://oauth2:${GITHUB_TOKEN}@github.com/WWH3602/second-brain.git` |
+| **仓库 URL** | `https://github.com/WWH3602/second-brain` |
 | **可见性** | 私有（Private） |
 | **默认分支** | `main` |
-| **认证方式** | Fine-grained Personal Access Token |
-| **Token ID（前 10 位）** | `11APKHNJI0`（用于 GitHub 端定位/吊销） |
-| **Token 存储位置** | 详见 `02_凭据与安全.md`（**已加入 `.gitignore`，不上传**，明文 Token 记录于此供新对话 AI 读取） |
-| **凭据说明文档** | `02_凭据与安全.md`（**已加入 `.gitignore`，不上传**） |
 
 ---
 
-## 2. 目录结构（AI 写入时按此规则）
+## 目录结构
 
 ```
-D:\AI赋能中心\03_知识资产仓\个人生活\03_第二大脑\        ← 本地工作区（Git 仓库根）
-├── .gitignore                          ← 关键：排除 02_凭据与安全.md
-├── 00_快速上手.md                       ← 5 分钟启动指南
-├── 01_初始化本地仓库.bat                ← 本机一键初始化脚本
-├── 02_凭据与安全.md                     ← ⚠️ 已被 .gitignore 排除，不上传
-├── 03_OpenClaw_初始化.sh               ← VM 端一键初始化脚本
-├── 04_OpenClaw_QQ_Hook_配置.md          ← 4 动作 hook 配置
-├── 00-Inbox\                           ← 收件箱：手机 QQ 消息只写这里
-├── 10-工具\
-│   ├── 10.1-电脑必备软件.md
-│   ├── 10.2-开发工具.md
-│   └── 10.3-提效工具.md
-├── 20-灵感\
-├── 30-网站\
-├── 40-美食\
-├── 50-名言\
-├── 90-归档\
-└── README.md                           ← 总索引（AI 查询入口）
+03_第二大脑/
+├── README.md                        ← 本文件（总入口）
+├── .gitignore
+├── .git/
+│
+├── docs/                            ← 文档（快速上手/凭据/配置/运维）
+│   ├── 00_快速上手.md               ← 5 分钟启动指南
+│   ├── 02_凭据与安全.md              ← ⚠️ .gitignore，不上传
+│   ├── 02_OpenClaw初始化.md         ← VM 端初始化步骤（合并版）
+│   ├── 02_OpenClaw初始化.sh         ← VM 端一键脚本
+│   ├── 03_QQ通道配置.md             ← QQ 4 动作配置（历史参考）
+│   └── 04_运维指南.md               ← 服务管理/故障排查快速查阅
+│
+├── scripts/                         ← 运维脚本（MCP server + 管理工具）
+│   ├── add_mcp.py                  ← 注册 MCP server 到 OpenClaw
+│   ├── monitor_openclaw.sh         ← 监控 OpenClaw 进程
+│   ├── restart_openclaw.py         ← 重启脚本
+│   ├── restart_openclaw.sh         ← 重启脚本（shell 版）
+│   ├── second_brain_mcp_server.py  ← 核心：笔记保存 MCP 工具
+│   ├── pull_second_brain.cmd       ← Windows pull 脚本
+│   └── pull_second_brain.ps1       ← Windows pull 脚本（PowerShell）
+│
+├── 01_初始化本地仓库.bat             ← Windows 本地一键初始化
+│
+├── 00-Inbox/                        ← 收件箱（手机 QQ 消息只写这里）
+├── 01-软件工具/
+├── 90-归档/
+└── workspace/                      ← 本地工作目录（git tracked）
 ```
-
-**冲突隔离策略（核心）**：
-- 手机端（QQ → OpenClaw）**只写** `00-Inbox/`
-- 电脑端（VSCode 直接编辑）写 `10-工具/` `20-灵感/` 等
-- AI 定期把 `00-Inbox/` 内容整理到对应目录
-- **永远不同时改一个文件 → 零冲突**
 
 ---
 
-## 3. 三端数据流
+## 三端数据流
 
 ```
-┌─────────┐   QQ聊天    ┌──────────┐   Git pull/push   ┌──────────┐
-│  手机(iOS) │ ────────→ │  OpenClaw │ ──────────────→ │  GitHub   │
-└─────────┘            │  (耗子助手) │                 │  私有仓库  │
-                        └──────────┘ ←──────────────  └──────────┘
+┌─────────┐   QQ聊天    ┌──────────┐   Git SSH    ┌──────────┐
+│ 手机iOS  │ ────────→  │ OpenClaw │ ──────────→ │ GitHub   │
+└─────────┘            │ (耗子助手)│              │ 私有仓库  │
+                       └──────────┘ ←───────────  └──────────┘
                                               ↑ git clone/pull
                                               │
                                         ┌──────────┐
                                         │  你的电脑  │
-                                        │(AI赋能中心)│
                                         └──────────┘
 ```
 
-- **手机**：只发 QQ 消息（iOS 无需装 Git App）
-- **OpenClaw（VM）**：pull → 写文件 → commit → push，仓库路径 `/home/wwh/second-brain`
-- **电脑（本地）**：直接 VSCode 编辑，OpenClaw 定时 pull 同步
+**手机**：只发 QQ 消息（iOS 无需装 Git App）
+**OpenClaw（VM）**：pull → 写文件 → commit → push，仓库路径 `/home/wwh/second-brain`
+**电脑（本地）**：直接 VSCode 编辑，定时 git pull 同步
 
 ---
 
-## 4. 用户与 OpenClaw 的标准对话（AI 必须支持）
+## 使用方式
 
-| 用户输入示例 | AI 动作 |
+| 用户输入 | AI 动作 |
 | --- | --- |
-| 「记一下：发现 Raycast 替代 Spotlight，https://raycast.com」 | pull → 追加到 `30-网站/工具网站.md` → push → 回执 |
-| 「我突然想到，可以用番茄钟做任务切分」 | pull → 追加到 `20-灵感/2026-06-ideas.md` → push |
-| 「小龙虾，整理一下这周的收件箱」 | pull → 读 `00-Inbox/` → AI 分类 → 移到对应目录 → push |
-| 「小龙虾，我新买了电脑，给我装机清单」 | 读 `README.md` + `10.1-电脑必备软件.md` → 生成有序清单 |
+| 「记：发现 Raycast 很好用 https://raycast.com」 | 自动分类 → commit → push → 回执（含 commit hash） |
+| 「小龙虾，整理一下收件箱」 | 读 `00-Inbox/` → AI 分类整理 |
+| 「小龙虾，我新买了电脑，装机清单」 | 读 `01-软件工具/10.1-电脑必备软件/` → 输出清单 |
 
 ---
 
-## 5. 凭据（详见 `02_凭据与安全.md`）
+## 当前主力写入链路
 
-- **GitHub PAT** 明文存在 `02_凭据与安全.md`（**已 `.gitignore` 排除，绝不上传**）
-- 新对话 AI 读取该文档后，用临时环境变量配 git remote，**不写进任何新文件**
-- 定期轮换（建议每 90 天）
+```
+QQ 消息 → OpenClaw qqbot → AI 识别"记：xxx"
+  → 调 save_to_second_brain() MCP 工具
+  → scripts/second_brain_mcp_server.py（stdio 子进程，懒加载）
+  → git pull/add/commit/push
+  → 响应（含 commit hash，如"（commit 7c8022c）"）
+```
+
+**注意**：QQ bot **不走** shell hook，走的是 MCP server。修改 MCP 源码后不需要重启 OpenClaw。
 
 ---
 
-## 6. 落地状态
+## 落地状态
 
-| 步骤 | 状态 | 完成时间 |
+| 步骤 | 状态 | 时间 |
 | --- | --- | --- |
-| 1. GitHub 私有仓库创建 | ✅ 完成 | 2026-06-17 |
-| 2. Fine-grained PAT 生成 | ✅ 完成 | 2026-06-17（Token ID `11APKHNJI0`，Contents R/W） |
-| 3. 凭据安全文档 v1.1 | ✅ 完成 | 2026-06-17（修正"信任边界"设计） |
-| 4. OpenClaw 服务器信息 | ✅ 已确认 | `D:\AI赋能中心\01_缓冲加工区\试验场\OpenClaw\公司虚拟机服务器\00-服务器信息总览.md` |
-| 5. 本地初始化脚本 + 骨架 | ✅ 完成 | 2026-06-17（`01_初始化本地仓库.bat`） |
-| 6. OpenClaw 端初始化脚本 | ✅ 完成 | 2026-06-17（`03_OpenClaw_初始化.sh`） |
-| 7. QQ Hook 4 动作配置 | ✅ 完成 | 2026-06-17（`04_OpenClaw_QQ_Hook_配置.md`） |
-| 8. 快速上手文档 | ✅ 完成 | 2026-06-17（`00_快速上手.md`） |
-| 9. 跑本地初始化 | ⏳ 待执行 | - |
-| 10. VM 端跑初始化 | ⏳ 待执行 | - |
-| 11. OpenClaw Web UI 配 4 hook | ⏳ 待执行 | - |
-| 12. 端到端测试（发 QQ 消息） | ⏳ 待执行 | - |
+| GitHub 私有仓库创建 | ✅ 完成 | 2026-06-17 |
+| PAT 生成 + 凭据文档 | ✅ 完成 | 2026-06-17 |
+| OpenClaw VM 初始化 | ✅ 完成 | 2026-06-17 |
+| MCP Server 部署（替代 hook） | ✅ 完成 | 2026-06-22 |
+| 端到端验证（commit hash 回执） | ✅ 完成 | 2026-06-22 |
+| 目录结构重构 | ✅ 完成 | 2026-06-22 |
 
 ---
 
-## 7. OpenClaw VM 信息（关键）
+## 文档索引
 
-| 项 | 值 |
+| 文档 | 内容 |
 | --- | --- |
-| **VM 名称** | AI-Agent (原 Dev-Ubuntu) |
-| **主机名** | `ai-agent` |
-| **IP（内网）** | `192.168.3.112` |
-| **IP（外网）** | `yidao.picp.net:10022` |
-| **用户名** | `wwh` |
-| **Home 目录** | `/home/wwh` |
-| **免密登录** | ✅ 已配置 |
-| **耗子助手** | 已部署（QQ 机器人 1904084266） |
-| **Web 端口** | 18789 |
-
-> **新对话 AI**：连接耗子助手请先读 `D:\AI赋能中心\01_缓冲加工区\试验场\OpenClaw\公司虚拟机服务器\00-服务器信息总览.md`
+| `docs/00_快速上手.md` | 5 分钟启动指南 |
+| `docs/04_运维指南.md` | 服务管理/故障排查/SSH 隧道 |
+| `docs/02_OpenClaw初始化.md` | VM 端初始化步骤 |
+| `docs/02_凭据与安全.md` | Token 存放与安全（.gitignore） |
 
 ---
 
-## 7. 相关文档
-
-- `00_快速上手.md` ✅ — 5 分钟启动指南
-- `01_初始化本地仓库.bat` ✅ — 本地一键初始化（**Windows**）
-- `02_凭据与安全.md` ✅ — Token 存放与轮换策略（**已 .gitignore**）
-- `03_OpenClaw_初始化.sh` ✅ — VM 端一键初始化（**Linux**）
-- `04_OpenClaw_QQ_Hook_配置.md` ✅ — QQ 机器人 4 动作 hook 配置
-- `README.md` ✅ — 总索引（AI 查询入口）
-
----
-
-**最后更新**: 2026-06-17（v1.1：PAT 已生成，Token ID `11APKHNJI0`）
+**最后更新**: 2026-06-22（v2.0：目录重构，文档/脚本/分类分离）
