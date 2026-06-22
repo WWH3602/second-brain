@@ -21,3 +21,9 @@ _*.ps1
 *.7z
 *.mp4
 *.mov
+
+# VM 运行时文件（OpenClaw 人设卡副本，已在 VM 端部署）
+workspace/IDENTITY.md
+
+# 个人备份（QQ 对话历史等）
+90-归档/
