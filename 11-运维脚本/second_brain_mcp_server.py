@@ -284,5 +284,104 @@ def query_second_brain(query: str = "", category: str = "") -> str:
         return f"❌ 查询失败：{e}"
 
 
+@mcp.tool()
+def organize_inbox(dry_run: bool = False) -> str:
+    """
+    整理收件箱。读取 00-收件箱/ 中所有未分类笔记，按分类规则归类到对应目录。
+    当用户说"整：收件箱"、"整理收件箱"时，调用此工具。
+
+    参数 dry_run: 是否试运行（仅预览、不实际移动文件），默认 False
+    """
+    try:
+        subprocess.run(
+            ["git", "-C", str(SB_DIR), "pull", "origin", "main"],
+            capture_output=True, text=True, timeout=30
+        )
+        inbox = SB_DIR / "00-收件箱"
+        if not inbox.exists():
+            return "📭 收件箱目录不存在"
+
+        notes = sorted(
+            f for f in inbox.glob("*.md")
+            if f.name not in ("README.md", "分类规则.md") and ".git" not in str(f)
+        )
+        if not notes:
+            return "📭 收件箱是空的，没有需要整理的笔记"
+
+        report = []
+        moved_count = 0
+        for note in notes:
+            content = note.read_text(encoding="utf-8")
+            category = classify(content, note.stem)
+            target_dir = SB_DIR / category
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_path = target_dir / note.name
+
+            if dry_run:
+                report.append(f"📋 {note.name} → {category}/")
+            else:
+                note.rename(target_path)
+                moved_count += 1
+                report.append(f"✅ {note.name} → {category}/")
+
+        if not dry_run and moved_count > 0:
+            subprocess.run(["git", "-C", str(SB_DIR), "add", "."], capture_output=True, text=True)
+            subprocess.run(
+                ["git", "-C", str(SB_DIR), "commit", "-m", f"inbox: 整理收件箱，归档 {moved_count} 条笔记"],
+                capture_output=True, text=True
+            )
+            subprocess.run(
+                ["git", "-C", str(SB_DIR), "push", "origin", "main"],
+                capture_output=True, text=True, timeout=30
+            )
+
+        return "📦 **收件箱整理" + ("预览" if dry_run else "完成") + f"**（{len(notes)} 条）\n\n" + "\n".join(report)
+
+    except Exception as e:
+        return f"❌ 整理失败：{e}"
+
+
+@mcp.tool()
+def list_directory(path: str = "") -> str:
+    """
+    列出第二大脑目录结构或指定目录内容。
+    当用户说"列："、"列出"、"看看有什么"、"有什么分类"时，调用此工具。
+
+    参数 path: 可选，指定目录路径（如 "01-软件工具"）, 不传则显示全部
+    """
+    try:
+        target = SB_DIR / path if path else SB_DIR
+        if not target.exists():
+            return f"📭 目录 {path} 不存在"
+
+        output = []
+        if not path:
+            # 显示全部顶层结构
+            output.append("📚 **第二大脑目录结构**\n")
+            for cat in sorted(CATEGORY_MAP):
+                cat_dir = SB_DIR / cat
+                if cat_dir.exists():
+                    files = sorted(f for f in cat_dir.rglob("*.md") if ".git" not in str(f))
+                    file_list = "\n".join(f"    ├─ {f.name}" for f in files[:10])
+                    more = f"\n    └─ ... 共 {len(files)} 个文件" if len(files) > 10 else ""
+                    output.append(f"📁 {cat}/ — {CATEGORY_MAP[cat]}\n{file_list}{more}\n")
+        else:
+            output.append(f"📁 **{path}/**\n")
+            for item in sorted(target.iterdir()):
+                if item.name.startswith("."):
+                    continue
+                if item.is_dir():
+                    sub_count = len(list(item.rglob("*.md")))
+                    output.append(f"📁 {item.name}/ ({sub_count} 个文件)")
+                else:
+                    size = len(item.read_text(encoding="utf-8"))
+                    output.append(f"📄 {item.name} ({size} 字)")
+
+        return "\n".join(output)
+
+    except Exception as e:
+        return f"❌ 列出失败：{e}"
+
+
 if __name__ == "__main__":
     mcp.run()
