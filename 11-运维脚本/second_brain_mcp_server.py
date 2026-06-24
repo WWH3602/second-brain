@@ -156,12 +156,12 @@ source: QQ/耗子助手
 @mcp.tool()
 def query_second_brain(query: str = "", category: str = "") -> str:
     """
-    查询 second-brain 知识库。根据关键词读取相关笔记内容，返回给用户。
+    查询 second-brain 知识库。根据意图读取对应笔记的完整内容返回给用户。
     当用户问"清单"、"推荐"、"有什么"、"给我看看"、"查询"、"最近有什么"、
     "装机清单"、"必装软件"、"美食推荐"、问某个城市/省份的美食时，调用此工具。
 
-    参数 query: 用户的查询关键词或意图（如"必装软件"、"福州美食"、"名言"）
-    参数 category: 可选，限定搜索目录（如"01-软件工具/PC软件"、"03-美食探店"）
+    参数 query: 用户的查询关键词或意图
+    参数 category: 可选，限定搜索目录
     """
     try:
         # 1. 先拉取最新
@@ -170,50 +170,115 @@ def query_second_brain(query: str = "", category: str = "") -> str:
             capture_output=True, text=True, timeout=30
         )
 
-        results = []
-        search_text = query.lower()
+        q = query.lower()
 
+        # ========== 已知意图直接路由（不走关键词模糊搜索）==========
+        # 装机/必装软件 → 直接读 PC软件清单.md 全文
+        if any(kw in q for kw in ['装机', '必装', '新电脑', '重装系统', '软件清单']):
+            target = SB_DIR / "01-软件工具" / "PC软件" / "PC软件清单.md"
+            if target.exists():
+                content = target.read_text(encoding="utf-8")
+                return f"📄 **01-软件工具/PC软件/PC软件清单.md**\n\n{content}"
+
+        # 安卓/电视软件 → 读安卓软件清单
+        if any(kw in q for kw in ['安卓', '电视', 'TV', 'tv', '手机软件', '手机app']):
+            target = SB_DIR / "01-软件工具" / "安卓软件" / "安卓软件清单.md"
+            if target.exists():
+                content = target.read_text(encoding="utf-8")
+                return f"📄 **01-软件工具/安卓软件/安卓软件清单.md**\n\n{content}"
+
+        # 苹果/Mac软件 → 读苹果软件清单
+        if any(kw in q for kw in ['苹果', 'mac', 'Mac']):
+            target = SB_DIR / "01-软件工具" / "苹果软件" / "苹果软件清单.md"
+            if target.exists():
+                content = target.read_text(encoding="utf-8")
+                return f"📄 **01-软件工具/苹果软件/苹果软件清单.md**\n\n{content}"
+
+        # 美食探店 → 读对应省份/城市
+        if any(kw in q for kw in ['美食', '好吃', '餐厅', '探店', '吃饭']):
+            # 尝试从 query 中提取城市名
+            cities_file = SB_DIR / "03-美食探店"
+            if cities_file.exists():
+                results = []
+                for province_dir in sorted(cities_file.iterdir()):
+                    if province_dir.is_dir():
+                        for city_file in sorted(province_dir.glob("*.md")):
+                            city_name = city_file.stem
+                            if city_name in q or not any(c in q for c in ['福州', '厦门', '泉州', '北京', '上海', '广州', '深圳']):
+                                # 没指定城市则返回全部
+                                content = city_file.read_text(encoding="utf-8")
+                                results.append(f"📄 **{city_file.relative_to(SB_DIR)}**\n{content}")
+                if results:
+                    return "\n---\n".join(results)
+
+        # 名言/灵感 → 读对应文件
+        if any(kw in q for kw in ['名言', '语录', '尼采', '名人']):
+            target = SB_DIR / "04-灵感哲思" / "名言警句.md"
+            if target.exists():
+                content = target.read_text(encoding="utf-8")
+                return f"📄 **04-灵感哲思/名言警句.md**\n\n{content}"
+
+        if any(kw in q for kw in ['灵感', '创意', 'idea', '想法']):
+            target = SB_DIR / "04-灵感哲思" / "灵感创意.md"
+            if target.exists():
+                content = target.read_text(encoding="utf-8")
+                return f"📄 **04-灵感哲思/灵感创意.md**\n\n{content}"
+
+        # 社交/人脉 → 读社交人脉
+        if any(kw in q for kw in ['人脉', '社交', '朋友', '张三']):
+            target = SB_DIR / "06-社交人脉" / "社交人脉.md"
+            if target.exists():
+                content = target.read_text(encoding="utf-8")
+                return f"📄 **06-社交人脉/社交人脉.md**\n\n{content}"
+
+        # MCP/OpenClaw 技术 → 读技术备忘
+        if any(kw in q for kw in ['MCP', 'mcp', 'OpenClaw', 'openclaw']):
+            target_dir = SB_DIR / "05-技术备忘"
+            if target_dir.exists():
+                results = []
+                for f in sorted(target_dir.glob("*.md")):
+                    results.append(f"📄 **{f.relative_to(SB_DIR)}**\n{f.read_text(encoding='utf-8')}")
+                return "\n---\n".join(results) if results else f"📭 技术备忘目录为空"
+
+        # ========== 指定分类目录搜索 ==========
         if category:
-            # 指定目录搜索
             target_dir = SB_DIR / category
             if target_dir.exists():
+                results = []
                 for f in sorted(target_dir.rglob("*.md")):
                     if ".git" in str(f):
                         continue
-                    rel_path = f.relative_to(SB_DIR)
-                    content = f.read_text(encoding="utf-8")
-                    if not search_text or search_text in content.lower():
-                        # 截取匹配段落
-                        preview = content[:800]
-                        results.append(f"📄 **{rel_path}**\n{preview}")
-        else:
-            # 全局搜索
-            for f in sorted(SB_DIR.rglob("*.md")):
-                if ".git" in str(f):
-                    continue
-                rel_path = f.relative_to(SB_DIR)
-                content = f.read_text(encoding="utf-8")
-                if not search_text or search_text in content.lower():
-                    preview = content[:500]
-                    results.append(f"📄 **{rel_path}**\n{preview}")
+                    results.append(f"📄 **{f.relative_to(SB_DIR)}**\n{f.read_text(encoding='utf-8')[:1000]}")
+                if results:
+                    return "\n---\n".join(results)
 
-            # 如果没有关键词匹配，也返回一些目录结构供 AI 参考
-            if not results and not search_text:
-                for cat in CATEGORY_MAP:
-                    cat_dir = SB_DIR / cat
-                    if cat_dir.exists():
-                        files = list(cat_dir.rglob("*.md"))
-                        file_list = "\n".join(
-                            f"  - {f.relative_to(SB_DIR)}" for f in sorted(files)
-                            if ".git" not in str(f)
-                        )
-                        results.append(f"📁 **{cat}** — {CATEGORY_MAP[cat]}\n{file_list if file_list else '  （空）'}")
+        # ========== 兜底：全局搜索（排除分类规则.md 避免干扰） ==========
+        results = []
+        for f in sorted(SB_DIR.rglob("*.md")):
+            if ".git" in str(f):
+                continue
+            # 排除分类规则文件本身，避免规则内容被当成答案
+            if "分类规则.md" in str(f):
+                continue
+            content = f.read_text(encoding="utf-8")
+            if q in content.lower():
+                results.append(f"📄 **{f.relative_to(SB_DIR)}**\n{content[:1000]}")
 
         if not results:
-            return f"📭 第二大脑中未找到与「{query}」相关的内容。"
+            # 如果关键词没匹配到，返回目录概览
+            dir_overview = []
+            for cat in sorted(CATEGORY_MAP):
+                cat_dir = SB_DIR / cat
+                if cat_dir.exists():
+                    files = sorted(cat_dir.rglob("*.md"))
+                    real_files = [f for f in files if ".git" not in str(f) and "分类规则.md" not in str(f)]
+                    if real_files:
+                        file_list = "\n".join(f"  - {f.relative_to(SB_DIR)}" for f in real_files)
+                        dir_overview.append(f"📁 **{cat}** — {CATEGORY_MAP[cat]}\n{file_list}")
+            return "📚 **第二大脑目录总览**\n\n" + "\n\n".join(dir_overview)
 
-        output = "\n---\n".join(results[:8])  # 最多8条
-        return f"📚 **第二大脑查询结果**（关键词：{query or '全部'}）\n\n{output}"
+        output = "\n---\n".join(results[:6])
+        return f"📚 **第二大脑查询结果**\n\n{output}"
 
     except Exception as e:
         return f"❌ 查询失败：{e}"
