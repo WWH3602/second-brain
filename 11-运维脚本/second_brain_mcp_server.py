@@ -78,15 +78,9 @@ def classify(content: str, title: str) -> str:
 @mcp.tool()
 def save_to_second_brain(content: str, title: str = "") -> str:
     """
-    将笔记保存到 second-brain 仓库，自动分类到对应目录，并自动 git push。
+    将笔记保存到 second-brain 仓库，统一存入收件箱（不自动分类）。
+    用户通过"整：收件箱"命令手动整理归类。
     当用户说"记：xxx"、"帮我记"、"请记"、"记录"时，调用此工具。
-    （不是 save_to_inbox，不要和 KnowledgeRepository 的 inbox 混淆）
-
-    分类规则：
-    - 包含URL/链接/爬取/文章 → 03-网络资源/
-    - 包含人名+社交动词（请客/吃饭/朋友等） → 02-人物/
-    - 包含开源/软件/下载/安装等 → 01-软件工具/
-    - 其他 → 00-Inbox/
 
     参数 content: 笔记正文内容
     参数 title:  可选标题
@@ -98,8 +92,8 @@ def save_to_second_brain(content: str, title: str = "") -> str:
             capture_output=True, text=True, timeout=30
         )
 
-        # 2. 自动分类
-        category = classify(content, title or "")
+        # 2. 不再自动分类，统一存入收件箱（用户用"整：收件箱"手动整理）
+        category = "00-收件箱"
         category_dir = SB_DIR / category
         category_dir.mkdir(parents=True, exist_ok=True)
 
@@ -139,11 +133,10 @@ source: QQ/耗子助手
             check=True, capture_output=True, text=True, timeout=30
         )
 
-        return (f"✅ 已记录到 second-brain\n"
-                f"📂 分类：{category}\n"
+        return (f"✅ 已记录到收件箱\n"
                 f"📁 文件：{category}/{filename}\n"
                 f"📝 内容预览：{content[:80]}{'...' if len(content) > 80 else ''}\n"
-                f"🔗 GitHub：https://github.com/WWH3602/second-brain/tree/main/{category}")
+                f"💡 用「整：收件箱」归类整理")
 
     except subprocess.TimeoutExpired:
         return "❌ 操作超时（git push 可能网络慢）"
